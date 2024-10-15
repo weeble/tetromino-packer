@@ -2,18 +2,19 @@ import itertools
 from dataclasses import dataclass
 from pysat.formula import CNF
 from pysat.solvers import Solver
+from typing import Literal, Mapping
+from collections.abc import Sequence
 
 type TritId = int
-type TetrominoId = Literal['I', 'O', 'L', 'J', 'S', 'Z', 'T']
+type TetrominoId = Literal['*', 'I', 'O', 'L', 'J', 'S', 'Z', 'T']
 type EmptyId = Literal[' ']
-type MineId = Literal['*']
-type ShapePart = EmptyId | TetrominoId | MineId
+type ShapePart = EmptyId | TetrominoId
 
 @dataclass(frozen=True)
 class Shape:
     width: int
     height: int
-    grid: tuple[ShapePart, ...]
+    grid: Sequence[Sequence[ShapePart]]
     def read(self, row: int, col: int) -> ShapePart:
         if 0<=row<self.height and 0<=col<self.width:
             return self.grid[row][col]
@@ -40,8 +41,8 @@ class Trit:
 
 @dataclass(frozen=True)
 class TritCollection:
-    by_id: dict[TritId, Trit]
-    by_tetromino: dict[TetrominoId, list[Trit]]
+    by_id: Mapping[TritId, Trit]
+    by_tetromino: Mapping[TetrominoId, list[Trit]]
 
     def __len__(self):
         return len(self.by_id)
@@ -58,7 +59,7 @@ def rotate90(s: Shape) -> Shape:
     return Shape(
         width=s.height,
         height=s.width,
-        grid=tuple(''.join(row[::-1]) for row in zip(*s.grid))
+        grid=tuple(tuple(row)[::-1] for row in zip(*s.grid))
     )
 
 def rotations(s: Shape) -> list[Shape]:
@@ -67,6 +68,10 @@ def rotations(s: Shape) -> list[Shape]:
     s4=rotate90(s3)
     return list({s,s2,s3,s4})
 
+def extract_tetromino_id(s: Shape) -> TetrominoId:
+    tid = [x for row in s.grid for x in row if x != ' '][0]
+    # assert isinstance(tid, TetrominoId)
+    return tid
 
 TETROMINOES_RAW = '''
 *
@@ -98,16 +103,17 @@ TETROMINOES = [
         for r in rotations(pad_tetromino(items))
 ]
 TETROMINOES_BY_LETTER = {
-        key: tuple(ts) for (key, ts) in itertools.groupby(TETROMINOES, key=lambda t:''.join(t.grid).replace(' ','')[0])
+        #key: tuple(ts) for (key, ts) in itertools.groupby(TETROMINOES, key=lambda t:''.join(t.grid).replace(' ','')[0])
+        key: tuple(ts) for (key, ts) in itertools.groupby(TETROMINOES, key=extract_tetromino_id)
 }
 
 
 
-def make_trits(tetrominoes: dict[TetrominoId, list[Shape]]) -> TritCollection:
+def make_trits(tetrominoes: Mapping[TetrominoId, Sequence[Shape]]) -> TritCollection:
     idcounter=0
 
-    trits_by_id = {}
-    trits_by_tetromino = {}
+    trits_by_id : dict[TritId, Trit] = {}
+    trits_by_tetromino : dict[TetrominoId, list[Trit]] = {}
 
     for tetromino_id, shapes in tetrominoes.items():
         for shape in shapes:
